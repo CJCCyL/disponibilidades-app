@@ -2939,7 +2939,7 @@ def my_event_availability(
     cred: HTTPAuthorizationCredentials = Depends(auth_scheme),
     db: Session = Depends(get_db)
 ):
-    user = get_user_from_token(cred.credentials, db)
+    user = get_user_from_token(cred.credentials if cred else None, db)
 
     event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
@@ -2961,7 +2961,7 @@ def create_my_event_availability(
     cred: HTTPAuthorizationCredentials = Depends(auth_scheme),
     db: Session = Depends(get_db)
 ):
-    user = get_user_from_token(cred.credentials, db)
+    user = get_user_from_token(cred.credentials if cred else None, db)
 
     event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
@@ -3018,7 +3018,7 @@ def delete_my_event_availability(
     cred: HTTPAuthorizationCredentials = Depends(auth_scheme),
     db: Session = Depends(get_db)
 ):
-    user = get_user_from_token(cred.credentials, db)
+    user = get_user_from_token(cred.credentials if cred else None, db)
 
     slot = (
         db.query(EventAvailabilitySlot)

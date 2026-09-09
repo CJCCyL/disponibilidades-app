@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { SimpleGrid, Text, Stack } from "@mantine/core";
+import { Text, Stack } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 
 function parseISODate(value) {
   const [year, month, day] = value.split("-").map(Number);
@@ -61,6 +62,12 @@ export default function EventAvailabilityPicker({ date, fetchSlots, createSlot, 
       } catch (error) {
         console.error(error);
         setSlots((prev) => [...prev, existing]);
+        notifications.show({
+          color: "red",
+          title: "No se pudo desmarcar",
+          message: "Error al eliminar la franja. Comprueba tu conexión e inténtalo de nuevo.",
+          autoClose: 4000,
+        });
       } finally {
         setPendingHours((prev) => {
           const next = new Set(prev);
@@ -76,6 +83,12 @@ export default function EventAvailabilityPicker({ date, fetchSlots, createSlot, 
       setSlots((prev) => [...prev, created]);
     } catch (error) {
       console.error(error);
+      notifications.show({
+        color: "red",
+        title: "No se pudo guardar",
+        message: "Error al marcar la franja. Comprueba tu conexión e inténtalo de nuevo.",
+        autoClose: 4000,
+      });
     } finally {
       setPendingHours((prev) => {
         const next = new Set(prev);
