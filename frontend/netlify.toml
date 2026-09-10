@@ -1,0 +1,16 @@
+# Configuración de despliegue en Netlify.
+# Cada instalación (comité) debe definir en el panel de Netlify la variable:
+#
+#   VITE_API_URL = https://<tu-backend>.onrender.com
+#
+# Sin esa variable el frontend no puede comunicarse con ningún backend.
+
+[build]
+  command   = "npm run build"
+  publish   = "dist"
+
+# Redirige todas las rutas al index.html para que React Router funcione.
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
