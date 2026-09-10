@@ -48,7 +48,9 @@ export default function Dashboard() {
         const answered = new Set(
           (myResponses || []).map((r) => Number(r && typeof r === "object" ? r.event_id : r))
         );
-        const pending = (events || []).filter((ev) => !answered.has(Number(ev.id))).length;
+        const pending = (events || []).filter(
+          (ev) => ev.event_type !== "disponibilidad" && !answered.has(Number(ev.id))
+        ).length;
         setPendingEvents(pending);
       } catch {
         // Silencioso: el badge es informativo, no crítico.
