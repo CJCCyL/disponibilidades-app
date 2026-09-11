@@ -686,6 +686,11 @@ class GuestEventAvailabilitySlotCreate(BaseModel):
 class GuestEventAvailabilityIdentify(BaseModel):
     guest_identifier: str
 
+class AvailabilityCreate(BaseModel):
+    date: str
+    start_time: str
+    end_time: str
+
 class SpaceCreate(BaseModel):
     name: str
     description: str | None
@@ -2915,6 +2920,98 @@ def respond_event_guest(
         "export_token": None,
     }
 
+
+# =========================================================
+# DISPONIBILIDAD SEMANAL (calendario personal del usuario)
+# =========================================================
+
+@app.get("/availability/my")
+def get_my_availability(
+    cred: HTTPAuthorizationCredentials = Depends(auth_scheme),
+    db: Session = Depends(get_db)
+):
+    user = get_user_from_token(cred.credentials, db)
+    return db.query(Availability).filter(Availability.user_id == user.id).all()
+
+
+@app.post("/availability/my")
+def create_my_availability(
+    data: AvailabilityCreate,
+    cred: HTTPAuthorizationCredentials = Depends(auth_scheme),
+    db: Session = Depends(get_db)
+):
+    user = get_user_from_token(cred.credentials, db)
+    a = Availability(
+        user_id=user.id,
+        date=data.date,
+        start_time=data.start_time,
+        end_time=data.end_time,
+    )
+    db.add(a)
+    db.commit()
+    db.refresh(a)
+    return a
+
+
+@app.delete("/availability/my/{avail_id}")
+def delete_availability(
+    avail_id: int,
+    cred: HTTPAuthorizationCredentials = Depends(auth_scheme),
+    db: Session = Depends(get_db)
+):
+    user = get_user_from_token(cred.credentials, db)
+    a = (
+        db.query(Availability)
+        .filter(Availability.id == avail_id, Availability.user_id == user.id)
+        .first()
+    )
+    if not a:
+        raise HTTPException(404, "No encontrado")
+    db.delete(a)
+    db.commit()
+    return {"ok": True}
+
+
+@app.get("/admin/availability")
+def admin_all_availability(
+    unit_id: int | None = None,
+    cred: HTTPAuthorizationCredentials = Depends(auth_scheme),
+    db: Session = Depends(get_db)
+):
+    admin = get_user_from_token(cred.credentials, db)
+    require_admin(admin)
+
+    # Purgar franjas con más de 14 días de antigüedad.
+    limit = (datetime.utcnow().date() - timedelta(days=14)).strftime("%Y-%m-%d")
+    db.query(Availability).filter(Availability.date < limit).delete(synchronize_session=False)
+    db.commit()
+
+    query = db.query(Availability)
+    if unit_id is not None:
+        # Filtrar por unidad organizativa: usuarios cuya unidad "hogar" sea
+        # la indicada o cualquier descendiente.
+        subtree_ids = org_service.subtree_unit_ids(db, unit_id)
+        query = query.join(User, User.id == Availability.user_id).filter(
+            User.org_unit_id.in_(subtree_ids)
+        )
+
+    items = query.all()
+    return [
+        {
+            "id": a.id,
+            "user": a.user.full_name,
+            "email": a.user.email,
+            "date": a.date,
+            "start_time": a.start_time,
+            "end_time": a.end_time,
+        }
+        for a in items
+    ]
+
+
+# =========================================================
+# DISPONIBILIDAD POR EVENTO (selector de franjas horarias)
+# =========================================================
 
 def _require_disponibilidad_event(event: Event) -> None:
     if (event.event_type or "").strip().lower() != "disponibilidad":
