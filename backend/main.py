@@ -27,6 +27,7 @@ from models import (
     EventResponse,
     EventCompanion,
     EventAvailabilitySlot,
+    EventReminder,
     GuestEventAvailabilitySlot,
     GuestResponse,
     GuestPolicy,
@@ -691,6 +692,20 @@ class AvailabilityCreate(BaseModel):
     start_time: str
     end_time: str
 
+class EventReminderCreate(BaseModel):
+    minutes_before: int
+    channels: list[str] = ["push"]
+
+class ReminderPrefsUpdate(BaseModel):
+    reminder_email: str | None = None
+    opt_in: bool = False
+
+class DeviceTokenRegister(BaseModel):
+    token: str
+    platform: str = "android"
+    device_id: str | None = None
+    user_role: str | None = None
+
 class SpaceCreate(BaseModel):
     name: str
     description: str | None
@@ -917,6 +932,151 @@ def _require_org_admin(admin: User):
     """Gestionar el organigrama requiere admin (la autoridad concreta sobre
     cada unidad se comprueba con can_manage_unit en cada operación)."""
     require_admin(admin)
+
+
+@app.get("/me/reminder-prefs")
+def get_reminder_prefs(
+    cred: HTTPAuthorizationCredentials = Depends(auth_scheme),
+    db: Session = Depends(get_db)
+):
+    user = get_user_from_token(cred.credentials, db)
+    return {
+        "reminder_email": user.reminder_email,
+        "opt_in": bool(user.availability_reminder_opt_in),
+    }
+
+
+@app.put("/me/reminder-prefs")
+def update_reminder_prefs(
+    data: ReminderPrefsUpdate,
+    cred: HTTPAuthorizationCredentials = Depends(auth_scheme),
+    db: Session = Depends(get_db)
+):
+    user = get_user_from_token(cred.credentials, db)
+    user.reminder_email = (data.reminder_email or "").strip() or None
+    user.availability_reminder_opt_in = 1 if data.opt_in else 0
+    db.commit()
+    return {"ok": True}
+
+
+@app.post("/device-tokens/register")
+def register_device_token(
+    data: DeviceTokenRegister,
+    cred: HTTPAuthorizationCredentials = Depends(auth_scheme),
+    db: Session = Depends(get_db)
+):
+    user = get_user_from_token(cred.credentials, db)
+    token_str = (data.token or "").strip()
+    if not token_str:
+        raise HTTPException(400, "token requerido")
+
+    existing = db.query(DeviceToken).filter(DeviceToken.token == token_str).first()
+    now_iso = datetime.utcnow().isoformat()
+    domain_tag = _get_domain(user.email) if user.email else None
+
+    if existing:
+        existing.user_id = user.id
+        existing.platform = data.platform or existing.platform
+        existing.device_identifier = data.device_id or existing.device_identifier
+        existing.user_role = data.user_role or user.role
+        existing.domain_tag = domain_tag
+        existing.org_unit_id = user.org_unit_id
+        existing.active = 1
+        existing.updated_at = now_iso
+        existing.last_used = now_iso
+    else:
+        db.add(DeviceToken(
+            user_id=user.id,
+            token=token_str,
+            platform=data.platform or "android",
+            device_identifier=data.device_id,
+            user_role=data.user_role or user.role,
+            domain_tag=domain_tag,
+            org_unit_id=user.org_unit_id,
+            active=1,
+            updated_at=now_iso,
+            last_used=now_iso,
+        ))
+    db.commit()
+    return {"ok": True}
+
+
+@app.get("/my-event-reminders")
+def my_event_reminders(
+    cred: HTTPAuthorizationCredentials = Depends(auth_scheme),
+    db: Session = Depends(get_db)
+):
+    user = get_user_from_token(cred.credentials, db)
+    rows = db.query(EventReminder).filter(EventReminder.user_id == user.id).all()
+    return [{"event_id": r.event_id, "channels": r.channels, "remind_at": r.remind_at} for r in rows]
+
+
+@app.put("/events/{event_id}/reminder")
+def set_event_reminder(
+    event_id: int,
+    data: EventReminderCreate,
+    cred: HTTPAuthorizationCredentials = Depends(auth_scheme),
+    db: Session = Depends(get_db)
+):
+    user = get_user_from_token(cred.credentials, db)
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(404, "Evento no encontrado")
+
+    # Calcular remind_at a partir de fecha + hora de inicio del evento.
+    try:
+        date_part = event.date  # "YYYY-MM-DD"
+        time_part = (event.start_time or "09:00").replace(".", ":")[:5]  # "HH:MM"
+        event_dt = datetime.strptime(f"{date_part} {time_part}", "%Y-%m-%d %H:%M")
+        remind_at = (event_dt - timedelta(minutes=data.minutes_before)).isoformat()
+    except Exception:
+        remind_at = event.date + "T09:00:00"
+
+    channels_str = ",".join(data.channels) if data.channels else "push"
+
+    existing = (
+        db.query(EventReminder)
+        .filter(EventReminder.event_id == event_id, EventReminder.user_id == user.id)
+        .first()
+    )
+    now_iso = datetime.utcnow().isoformat()
+    if existing:
+        existing.remind_at = remind_at
+        existing.channels = channels_str
+        existing.sent = 0
+        existing.created_at = now_iso
+    else:
+        db.add(EventReminder(
+            event_id=event_id,
+            user_id=user.id,
+            remind_at=remind_at,
+            channels=channels_str,
+            sent=0,
+            created_at=now_iso,
+        ))
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+    return {"ok": True, "remind_at": remind_at}
+
+
+@app.delete("/events/{event_id}/reminder")
+def delete_event_reminder(
+    event_id: int,
+    cred: HTTPAuthorizationCredentials = Depends(auth_scheme),
+    db: Session = Depends(get_db)
+):
+    user = get_user_from_token(cred.credentials, db)
+    row = (
+        db.query(EventReminder)
+        .filter(EventReminder.event_id == event_id, EventReminder.user_id == user.id)
+        .first()
+    )
+    if row:
+        db.delete(row)
+        db.commit()
+    return {"ok": True}
 
 
 @app.get("/me/org-scope")
