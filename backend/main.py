@@ -872,15 +872,55 @@ def refresh_auth_token(
     return {"access_token": token, "token_type": "bearer"}
 
 
-@app.get("/debug/routes")
-def debug_routes():
-    """Diagnóstico: lista todas las rutas registradas que contienen 'availability'."""
-    routes = [
-        {"path": r.path, "methods": list(r.methods)}
+@app.get("/debug")
+def debug_info(db: Session = Depends(get_db)):
+    """
+    Endpoint de diagnóstico completo — ELIMINAR en producción final.
+    Cubre: versión, Python, FastAPI, rutas registradas, DB, tabla Availability.
+    """
+    import sys, fastapi as _fa, sqlalchemy as _sa
+
+    # 1. Rutas registradas (todas)
+    all_routes = [
+        {"path": r.path, "methods": sorted(r.methods)}
         for r in app.routes
-        if hasattr(r, "path") and "availability" in r.path
+        if hasattr(r, "path") and hasattr(r, "methods")
     ]
-    return {"version": "c16a1ee", "availability_routes": routes}
+
+    # 2. Conexión y tabla Availability
+    db_ok = False
+    avail_table_exists = False
+    avail_count = None
+    db_error = None
+    try:
+        db.execute(_sa.text("SELECT 1"))
+        db_ok = True
+        inspector = _sa.inspect(db.bind)
+        avail_table_exists = "availabilities" in inspector.get_table_names()
+        if avail_table_exists:
+            avail_count = db.execute(_sa.text("SELECT COUNT(*) FROM availabilities")).scalar()
+    except Exception as e:
+        db_error = str(e)
+
+    # 3. Variables de entorno relevantes (sin revelar secretos)
+    env_keys = {
+        "DATABASE_URL": bool(os.getenv("DATABASE_URL")),
+        "SECRET_KEY": bool(os.getenv("SECRET_KEY")),
+        "CORS_ORIGINS": os.getenv("CORS_ORIGINS", "no configurado"),
+    }
+
+    return {
+        "version_commit": "54b0655",
+        "python": sys.version,
+        "fastapi": _fa.__version__,
+        "sqlalchemy": _sa.__version__,
+        "db_reachable": db_ok,
+        "availability_table_exists": avail_table_exists,
+        "availability_row_count": avail_count,
+        "db_error": db_error,
+        "env": env_keys,
+        "routes": all_routes,
+    }
 
 
 @app.get("/me")
