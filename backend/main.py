@@ -872,6 +872,17 @@ def refresh_auth_token(
     return {"access_token": token, "token_type": "bearer"}
 
 
+@app.get("/debug/routes")
+def debug_routes():
+    """Diagnóstico: lista todas las rutas registradas que contienen 'availability'."""
+    routes = [
+        {"path": r.path, "methods": list(r.methods)}
+        for r in app.routes
+        if hasattr(r, "path") and "availability" in r.path
+    ]
+    return {"version": "c16a1ee", "availability_routes": routes}
+
+
 @app.get("/me")
 def me(
     cred: HTTPAuthorizationCredentials = Depends(auth_scheme),
