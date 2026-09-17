@@ -138,6 +138,7 @@ class EventCreate(BaseModel):
     date: str
     start_time: str | None
     end_time: str | None
+    event_type: str = "participativo"  # "informativo" | "participativo" | "disponibilidad"
 
 class EventResponseCreate(BaseModel):
     answer: str
@@ -286,6 +287,7 @@ def create_event(
         date=data.date,
         start_time=data.start_time,
         end_time=data.end_time,
+        event_type=data.event_type,
         created_by=admin.id
     )
     db.add(ev)
@@ -305,6 +307,7 @@ def list_events(db: Session = Depends(get_db)):
             "date": e.date,
             "start_time": e.start_time,
             "end_time": e.end_time,
+            "event_type": e.event_type or "participativo",
         }
         for e in db.query(Event).all()
     ]
@@ -330,7 +333,8 @@ def get_event(
         "description": ev.description,
         "date": ev.date,
         "start_time": ev.start_time,
-        "end_time": ev.end_time
+        "end_time": ev.end_time,
+        "event_type": ev.event_type or "participativo",
     }
 
 

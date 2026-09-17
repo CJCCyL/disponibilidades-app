@@ -39,6 +39,8 @@ class Event(Base):
     date = Column(String, nullable=False)
     start_time = Column(String)
     end_time = Column(String)
+    # "informativo" | "participativo" (Sí/No) | "disponibilidad" (Sí/Ninguna)
+    event_type = Column(String, default="participativo", nullable=False, server_default="participativo")
 
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
 

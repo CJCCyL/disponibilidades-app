@@ -10,23 +10,26 @@ function resumirVotos(responses) {
   const seen = new Set();
   let si = 0;
   let no = 0;
+  let ninguna = 0;
 
   for (const r of responses) {
     const key = r.user_full_name; // 1 voto por persona
     if (seen.has(key)) continue;
     seen.add(key);
 
-    if (r.answer === "yes" || r.answer ==="si") si++;
+    if (r.answer === "yes" || r.answer === "si") si++;
     else if (r.answer === "no") no++;
+    else if (r.answer === "ninguna") ninguna++;
   }
 
-  return { si, no };
+  return { si, no, ninguna };
 }
 
 export default function AdminEventResponses() {
   const { id } = useParams();
   const [responses, setResponses] = useState([]);
   const [eventName, setEventName] = useState("");
+  const [eventType, setEventType] = useState("participativo");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -38,9 +41,12 @@ export default function AdminEventResponses() {
         const resp = await adminAPI.getEventResponses(id);
         if (!cancelled) setResponses(resp);
 
-        // 2) Obtener título del evento
+        // 2) Obtener título y tipo del evento
         const ev = await adminAPI.getEvent(id);
-        if (!cancelled) setEventName(ev.title);
+        if (!cancelled) {
+          setEventName(ev.title);
+          setEventType(ev.event_type || "participativo");
+        }
 
       } catch (e) {
         console.error("Error cargando respuestas", e);
@@ -52,7 +58,7 @@ export default function AdminEventResponses() {
     };
   }, [id]);
 
-  const { si, no } = resumirVotos(responses);
+  const { si, no, ninguna } = resumirVotos(responses);
 
   return (
     <Box p="lg">
@@ -70,7 +76,11 @@ export default function AdminEventResponses() {
       <Card shadow="sm" p="lg" mb="lg" style={{ background: "#eef6ff" }}>
         <Title order={4} mb="sm">Resumen de votos</Title>
         <Text><b>Sí:</b> {si}</Text>
-        <Text><b>No:</b> {no}</Text>
+        {eventType === "disponibilidad" ? (
+          <Text><b>Ninguna:</b> {ninguna}</Text>
+        ) : (
+          <Text><b>No:</b> {no}</Text>
+        )}
       </Card>
 
       {responses.length === 0 && (

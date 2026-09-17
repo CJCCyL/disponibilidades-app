@@ -1,32 +1,40 @@
 import { useEffect, useState } from "react";
-import { Card, Button, TextInput, Title, Textarea, Text } from "@mantine/core";
+import { Card, Button, TextInput, Title, Textarea, Text, Select } from "@mantine/core";
 import { adminAPI } from "../api/adminApi.js";
 import { useNavigate } from "react-router-dom";
 
-function contarSiNo(answers = []) {
+function contarVotos(answers = []) {
   const unique = new Map();
 
   for (const a of answers) {
     if (!unique.has(a.user_id)) {
-      unique.set(a.user_id, a.answer); // "yes" o "no"
+      unique.set(a.user_id, a.answer);
     }
   }
 
-  let si = 0, no = 0;
+  let si = 0, no = 0, ninguna = 0;
 
   for (const v of unique.values()) {
-    if (v === "yes" || v==="si") si++;
+    if (v === "yes" || v === "si") si++;
     else if (v === "no") no++;
+    else if (v === "ninguna") ninguna++;
   }
 
-  return { si, no };
+  return { si, no, ninguna };
 }
+
+const TIPO_LABELS = {
+  informativo: "Informativo",
+  participativo: "Participativo",
+  disponibilidad: "Disponibilidad",
+};
 
 export default function AdminEvents() {
   const [events, setEvents] = useState([]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState("");
+  const [eventType, setEventType] = useState("participativo");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -41,9 +49,7 @@ export default function AdminEvents() {
       }
     })();
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   async function reload() {
@@ -64,12 +70,14 @@ export default function AdminEvents() {
         description: description || null,
         date,
         start_time: null,
-        end_time: null
+        end_time: null,
+        event_type: eventType,
       });
 
       setTitle("");
       setDescription("");
       setDate("");
+      setEventType("participativo");
       await reload();
     } catch (e) {
       console.error("Error creando evento", e);
@@ -89,9 +97,7 @@ export default function AdminEvents() {
 
   return (
     <>
-      <Title order={3} mb="md">
-        Crear evento
-      </Title>
+      <Title order={3} mb="md">Crear evento</Title>
 
       <Card shadow="sm" p="md" mb="xl">
         <TextInput
@@ -113,58 +119,62 @@ export default function AdminEvents() {
           onChange={(e) => setDate(e.target.value)}
           mb="sm"
         />
+        <Select
+          label="Tipo de evento"
+          value={eventType}
+          onChange={setEventType}
+          data={[
+            { value: "informativo",   label: "Informativo (sin votación)" },
+            { value: "participativo", label: "Participativo (Sí / No)" },
+            { value: "disponibilidad", label: "Disponibilidad (Sí / Ninguna)" },
+          ]}
+          mb="sm"
+        />
 
         <Button onClick={createEvent}>Crear evento</Button>
       </Card>
 
-      <Title order={3} mb="md">
-        Eventos existentes
-      </Title>
+      <Title order={3} mb="md">Eventos existentes</Title>
 
       {events.length === 0 && (
-        <Text size="sm" c="dimmed">
-          No hay eventos.
-        </Text>
+        <Text size="sm" c="dimmed">No hay eventos.</Text>
       )}
 
-      {events.map((ev) => (
-        <Card key={ev.id} shadow="sm" p="md" mb="md">
-          <b>{ev.title}</b> — {ev.date}
-          {ev.description && <p>{ev.description}</p>}
+      {events.map((ev) => {
+        const tipo = ev.event_type || "participativo";
+        const { si, no, ninguna } = contarVotos(ev.answers);
 
-          {/* Resumen de votos Sí / No */}
-          {ev.answers && ev.answers.length > 0 && (
-            <div style={{ marginTop: "10px" }}>
-              <b>Resumen de votos:</b>
-              {(() => {
-                const { si, no } = contarSiNo(ev.answers);
-                return (
-                  <>
-                    <div>Sí: {si}</div>
-                    <div>No: {no}</div>
-                  </>
-                );
-              })()}
-            </div>
-          )}
+        return (
+          <Card key={ev.id} shadow="sm" p="md" mb="md">
+            <b>{ev.title}</b> — {ev.date}
+            <Text size="xs" c="dimmed">
+              Tipo: {TIPO_LABELS[tipo] ?? tipo}
+            </Text>
+            {ev.description && <p>{ev.description}</p>}
 
-          <Button
-            mt="sm"
-            onClick={() => navigate(`/admin/event/${ev.id}`)}
-          >
-            Ver respuestas
-          </Button>
+            {/* Resumen de votos según tipo */}
+            {ev.answers && ev.answers.length > 0 && tipo !== "informativo" && (
+              <div style={{ marginTop: "10px" }}>
+                <b>Resumen de votos:</b>
+                <div>Sí: {si}</div>
+                {tipo === "disponibilidad" ? (
+                  <div>Ninguna: {ninguna}</div>
+                ) : (
+                  <div>No: {no}</div>
+                )}
+              </div>
+            )}
 
-          <Button
-            mt="sm"
-            ml="sm"
-            color="red"
-            onClick={() => deleteEvent(ev.id)}
-          >
-            Eliminar
-          </Button>
-        </Card>
-      ))}
+            <Button mt="sm" onClick={() => navigate(`/admin/event/${ev.id}`)}>
+              Ver respuestas
+            </Button>
+
+            <Button mt="sm" ml="sm" color="red" onClick={() => deleteEvent(ev.id)}>
+              Eliminar
+            </Button>
+          </Card>
+        );
+      })}
     </>
   );
 }
