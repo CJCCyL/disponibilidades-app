@@ -2953,11 +2953,17 @@ def respond_event(
 ):
     user = get_user_from_token(cred.credentials, db)
 
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(404, "Evento no encontrado")
+
     raw_answer = str(data.answer).strip().lower()
     if raw_answer in ["si", "sí", "yes"]:
         normalized_answer = "si"
     elif raw_answer == "no":
         normalized_answer = "no"
+    elif raw_answer == "ninguna" and event.event_type == "disponibilidad":
+        normalized_answer = "ninguna"
     else:
         raise HTTPException(400, "answer inválida (usa 'si' o 'no')")
 

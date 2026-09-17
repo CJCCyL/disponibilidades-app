@@ -191,7 +191,11 @@ export default function EventsSection() {
       notifications.show({
         color: "teal",
         title: "Respuesta registrada",
-        message: answer === "si" ? "Has confirmado tu asistencia." : "Has indicado que no asistirás.",
+        message: answer === "ninguna"
+          ? "Has indicado que no tienes disponibilidad."
+          : answer === "si"
+          ? "Has confirmado tu asistencia."
+          : "Has indicado que no asistirás.",
         icon: <IconCheck size={18} />,
       });
     } catch (e) {
@@ -415,12 +419,42 @@ export default function EventsSection() {
                 </Group>
 
                 {ev.event_type === "disponibilidad" ? (
-                  <EventAvailabilityPicker
-                    date={ev.date}
-                    fetchSlots={() => eventsAPI.getMyEventAvailability(eventId)}
-                    createSlot={(hour) => eventsAPI.createMyEventAvailability(eventId, hour)}
-                    deleteSlot={(slotId) => eventsAPI.deleteMyEventAvailability(eventId, slotId)}
-                  />
+                  <>
+                    <EventAvailabilityPicker
+                      date={ev.date}
+                      fetchSlots={() => eventsAPI.getMyEventAvailability(eventId)}
+                      createSlot={(hour) => eventsAPI.createMyEventAvailability(eventId, hour)}
+                      deleteSlot={(slotId) => eventsAPI.deleteMyEventAvailability(eventId, slotId)}
+                      disabled={currentAnswer === "ninguna"}
+                    />
+                    {currentAnswer === "ninguna" ? (
+                      <Group justify="space-between" align="center" mt="xs">
+                        <Badge variant="light" color="gray" size="lg" leftSection={<IconX size={16} />}>
+                          Sin disponibilidad
+                        </Badge>
+                        <Anchor
+                          component="button"
+                          type="button"
+                          size="sm"
+                          onClick={() => respond(eventId, "si")}
+                        >
+                          Cambiar respuesta
+                        </Anchor>
+                      </Group>
+                    ) : (
+                      <Button
+                        variant="light"
+                        color="gray"
+                        size="xs"
+                        mt="xs"
+                        loading={busy}
+                        disabled={busy}
+                        onClick={() => respond(eventId, "ninguna")}
+                      >
+                        Sin disponibilidad
+                      </Button>
+                    )}
+                  </>
                 ) : (
                   <>
                     {answered && !editing && (

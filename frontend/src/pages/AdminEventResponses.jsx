@@ -14,6 +14,7 @@ function normalizeAnswer(answer) {
   const v = String(answer ?? "").trim().toLowerCase();
   if (v === "yes" || v === "si") return "si";
   if (v === "no") return "no";
+  if (v === "ninguna") return "ninguna";
   return v;
 }
 
@@ -98,6 +99,10 @@ export default function AdminEventResponses() {
             const guestSlots = await adminAPI.getEventGuestAvailability(id);
             if (!cancelled) setGuestAvailability(guestSlots);
           }
+
+          // 4) Respuestas "ninguna" (militantes que declararon sin disponibilidad)
+          const resp = await adminAPI.getEventResponses(id);
+          if (!cancelled) setResponses(resp);
           return;
         }
 
@@ -158,6 +163,11 @@ export default function AdminEventResponses() {
 
   const { si, no } = resumirVotos(filteredResponses);
   const simpas = filteredResponses.reduce((acc, r) => acc + Number(r.companions_count || 0), 0);
+
+  const ningunaCount = useMemo(
+    () => responses.filter((r) => normalizeAnswer(r.answer) === "ninguna").length,
+    [responses]
+  );
 
   // Los visitantes se resumen aparte: no son militantes y hay que poder
   // distinguirlos al contar la asistencia.
@@ -301,6 +311,9 @@ export default function AdminEventResponses() {
             <Text size="sm" c="dimmed" mt="md">
               Militantes con disponibilidad: {filteredAvailability.length}
               {isPublic && ` · Visitantes con disponibilidad: ${guestAvailability.length}`}
+              {ningunaCount > 0 && (
+                <> · <Badge color="gray" variant="light" size="sm">Sin disponibilidad: {ningunaCount}</Badge></>
+              )}
             </Text>
           </Card>
 
