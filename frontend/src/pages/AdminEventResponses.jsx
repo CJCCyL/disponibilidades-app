@@ -351,6 +351,21 @@ export default function AdminEventResponses() {
               </Text>
             </Card>
           ))}
+
+          {ningunaCount > 0 && (
+            <>
+              <Title order={4} mt="lg" mb="sm">Sin disponibilidad ({ningunaCount})</Title>
+              {responses
+                .filter((r) => normalizeAnswer(r.answer) === "ninguna")
+                .map((r, idx) => (
+                  <Card key={r.user_id ?? idx} mt="md" shadow="sm" p="lg">
+                    <Text fw={600}>{r.user_full_name}</Text>
+                    <Text c="dimmed" size="sm">Colectivo: {r.user_domain || "-"}</Text>
+                  </Card>
+                ))
+              }
+            </>
+          )}
         </>
       ) : (
         <>
