@@ -444,7 +444,7 @@ export default function EventsSection() {
                     ) : (
                       <Button
                         variant="light"
-                        color="gray"
+                        color="orange"
                         size="xs"
                         mt="xs"
                         loading={busy}
